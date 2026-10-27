@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  STUDENT
+  FACULTY
+  ADMIN
+}
+enum SpaceType {
+  CABIN
+  CHAIR
+}
+enum SpaceStatus {
+  ACTIVE
+  MAINTENANCE
+}
+enum BookingStatus {
+  CONFIRMED
+  CHECKED_IN
+  CANCELLED
+  NO_SHOW
+  COMPLETED
+}
+enum WaitlistStatus {
+  WAITING
+  NOTIFIED
+  FULFILLED
+  CANCELLED
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(STUDENT)
+  institutionId String?
+  createdAt    DateTime @default(now())
+  bookings      Booking[]
+  waitlist      WaitlistEntry[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  resetTokens   PasswordReset[]
+}
+
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Floor {
+  id     Int     @id @default(autoincrement())
+  number Int     @unique
+  name   String
+  active Boolean @default(true)
+  spaces Space[]
+  blackouts Blackout[]
+}
+
+model Space {
+  id       Int         @id @default(autoincrement())
+  floorId  Int
+  name     String
+  type     SpaceType
+  capacity Int         @default(1)
+  status   SpaceStatus @default(ACTIVE)
+  details  String?
+  floor    Floor       @relation(fields: [floorId], references: [id])
+  bookings Booking[]
+  waitlist WaitlistEntry[]
+  blackouts Blackout[]
+  @@unique([floorId, name])
+}
+
+model BookingRule {
+  id             Int   @id @default(autoincrement())
+  role           Role  @unique
+  maxDurationMin Int   @default(120)
+  advanceDays    Int   @default(7)
+  maxActive      Int   @default(2)
+}
+
+model Blackout {
+  id       Int      @id @default(autoincrement())
+  spaceId  Int?
+  floorId  Int?
+  startsAt DateTime
+  endsAt   DateTime
+  reason   String?
+  space    Space?   @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  floor    Floor?   @relation(fields: [floorId], references: [id], onDelete: Cascade)
+}
+
+model Booking {
+  id        Int           @id @default(autoincrement())
+  userId    Int
+  spaceId   Int
+  startsAt  DateTime
+  endsAt    DateTime
+  status    BookingStatus @default(CONFIRMED)
+  qrToken   String        @unique
+  checkedInAt DateTime?
+  createdAt DateTime      @default(now())
+  user      User          @relation(fields: [userId], references: [id])
+  space     Space         @relation(fields: [spaceId], references: [id])
+  @@index([spaceId, startsAt])
+  @@index([userId])
+}
+
+model WaitlistEntry {
+  id        Int            @id @default(autoincrement())
+  userId    Int
+  spaceId   Int
+  startsAt  DateTime
+  endsAt    DateTime
+  status    WaitlistStatus @default(WAITING)
+  createdAt DateTime       @default(now())
+  user      User           @relation(fields: [userId], references: [id])
+  space     Space          @relation(fields: [spaceId], references: [id])
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  sentAt    DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  actorId   Int?
+  action    String
+  entity    String
+  entityId  Int?
+  meta      Json?
+  createdAt DateTime @default(now())
+  actor     User?    @relation(fields: [actorId], references: [id])
+}
